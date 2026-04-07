@@ -1,0 +1,16 @@
+.bg-primary {
+  @apply bg-blue-500;
+}
+
+.text-secondary {
+  @apply text-gray-700;
+}
+
+/* Add your custom global styles below */
+
+body {
+  @apply font-sans;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
