@@ -1,0 +1,203 @@
+// frontend/src/components/QuoteForm/QuoteForm.tsx
+import { useState } from 'react';
+import { QuoteFormData, QuoteResponse, BANDWIDTH_OPTIONS, SLA_OPTIONS, CONTRACT_OPTIONS } from '../../types';
+import { api } from '../../services/api';
+import styles from './QuoteForm.module.css';
+
+interface Props {
+  onResult: (result: QuoteResponse) => void;
+}
+
+const STEPS = ['Location & Speed', 'SLA & Contract', 'Your Details'];
+
+export default function QuoteForm({ onResult }: Props) {
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState<QuoteFormData>({
+    postalCode: '',
+    bandwidthMbps: 100,
+    contractYears: 1,
+    slaRequired: 99.9,
+    businessName: '',
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+  });
+
+  const set = (key: keyof QuoteFormData, value: string | number) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  const validateStep = (): string => {
+    if (step === 0) {
+      if (!/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/.test(form.postalCode))
+        return 'Please enter a valid Canadian postal code (e.g. M5V 3A8)';
+    }
+    if (step === 2) {
+      if (!form.businessName.trim()) return 'Business name is required';
+      if (!form.contactName.trim()) return 'Contact name is required';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail))
+        return 'Please enter a valid email address';
+    }
+    return '';
+  };
+
+  const next = () => {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setError('');
+    setStep((s) => s + 1);
+  };
+
+  const back = () => { setError(''); setStep((s) => s - 1); };
+
+  const submit = async () => {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setError('');
+    setLoading(true);
+    try {
+      const result = await api.getQuote(form);
+      onResult(result);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to get quotes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.wrapper}>
+      {/* Progress bar */}
+      <div className={styles.progress}>
+        {STEPS.map((label, i) => (
+          <div key={label} className={`${styles.progressStep} ${i <= step ? styles.active : ''}`}>
+            <div className={styles.progressDot}>
+              {i < step ? '✓' : i + 1}
+            </div>
+            <span className={styles.progressLabel}>{label}</span>
+          </div>
+        ))}
+        <div className={styles.progressTrack}>
+          <div className={styles.progressFill} style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }} />
+        </div>
+      </div>
+
+      {/* Step content */}
+      <div className={styles.stepContent} key={step}>
+        {step === 0 && (
+          <div className={`${styles.fields} animate-fadeUp`}>
+            <div>
+              <label className="label">Business postal code *</label>
+              <input
+                className="input"
+                placeholder="e.g. M5V 3A8"
+                value={form.postalCode}
+                onChange={(e) => set('postalCode', e.target.value.toUpperCase())}
+                maxLength={7}
+              />
+              <p className={styles.hint}>Used to check which providers serve your area.</p>
+            </div>
+            <div>
+              <label className="label">Required bandwidth *</label>
+              <div className={styles.optionGrid}>
+                {BANDWIDTH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.optionBtn} ${form.bandwidthMbps === opt.value ? styles.selected : ''}`}
+                    onClick={() => set('bandwidthMbps', opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className={`${styles.fields} animate-fadeUp`}>
+            <div>
+              <label className="label">Minimum SLA uptime *</label>
+              <div className={styles.optionGrid}>
+                {SLA_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.optionBtn} ${form.slaRequired === opt.value ? styles.selected : ''}`}
+                    onClick={() => set('slaRequired', opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className={styles.hint}>Higher SLA = fewer providers but better reliability guarantees.</p>
+            </div>
+            <div>
+              <label className="label">Contract length *</label>
+              <div className={styles.optionGrid}>
+                {CONTRACT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    className={`${styles.optionBtn} ${form.contractYears === opt.value ? styles.selected : ''}`}
+                    onClick={() => set('contractYears', opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className={`${styles.fields} animate-fadeUp`}>
+            <div>
+              <label className="label">Business name *</label>
+              <input className="input" placeholder="Acme Corp" value={form.businessName}
+                onChange={(e) => set('businessName', e.target.value)} />
+            </div>
+            <div className={styles.row}>
+              <div>
+                <label className="label">Your name *</label>
+                <input className="input" placeholder="Jane Smith" value={form.contactName}
+                  onChange={(e) => set('contactName', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Phone (optional)</label>
+                <input className="input" placeholder="416-555-0100" value={form.contactPhone}
+                  onChange={(e) => set('contactPhone', e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className="label">Business email *</label>
+              <input className="input" type="email" placeholder="jane@acmecorp.com" value={form.contactEmail}
+                onChange={(e) => set('contactEmail', e.target.value)} />
+              <p className={styles.hint}>We'll email your quote summary. No spam — ever.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && <p className={styles.error}>{error}</p>}
+
+      {/* Navigation */}
+      <div className={styles.nav}>
+        {step > 0 && (
+          <button className="btn-secondary" onClick={back} disabled={loading}>
+            ← Back
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        {step < STEPS.length - 1 ? (
+          <button className="btn-primary" onClick={next}>
+            Continue →
+          </button>
+        ) : (
+          <button className="btn-primary" onClick={submit} disabled={loading}>
+            {loading ? 'Getting quotes…' : 'Get My Quotes →'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
